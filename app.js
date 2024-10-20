@@ -114,10 +114,12 @@ app.post('/send-email', async (req, res) => {
     return res.status(400).json({ error: 'Email and results are required' });
   }
 
-  let data = JSON.stringify(results);
-  data = JSON.parse(data);
+  // Separate StackOverflow and Reddit data
+  const stackOverflowResults = results.filter(item => item.question_id); // StackOverflow questions
+  const redditResults = results.filter(item => item.subreddit); // Reddit posts
 
-  function generateHTML(data) {
+  // Function to generate HTML content
+  function generateHTML(stackOverflowResults, redditResults) {
     let html = `
     <h2>Search Results</h2>
     <h3>StackOverflow Questions</h3>
@@ -125,12 +127,13 @@ app.post('/send-email', async (req, res) => {
     <thead>
     <tr><th>Title</th><th>Tags</th><th>Owner</th><th>Link</th></tr>
     </thead><tbody>`;
-    
-    data.stackOverflow.forEach(item => {
+
+    // StackOverflow questions
+    stackOverflowResults.forEach(item => {
       html += `
       <tr>
       <td>${item.title}</td>
-      <td>${item.tags.join(", ")}</td>
+      <td>${item.tags ? item.tags.join(", ") : "No tags"}</td>
       <td><a href="${item.owner.link}">${item.owner.display_name}</a></td>
       <td><a href="${item.link}">View Question</a></td>
       </tr>`;
@@ -139,7 +142,8 @@ app.post('/send-email', async (req, res) => {
     html += `</tbody></table><h3>Reddit Posts</h3><table border="1" cellpadding="5" cellspacing="0">
     <thead><tr><th>Title</th><th>Subreddit</th><th>Author</th><th>Link</th></tr></thead><tbody>`;
     
-    data.reddit.forEach(post => {
+    // Reddit posts
+    redditResults.forEach(post => {
       html += `
       <tr>
       <td>${post.title}</td>
@@ -154,13 +158,18 @@ app.post('/send-email', async (req, res) => {
     return html;
   }
 
+  // Generate the HTML with the separated StackOverflow and Reddit data
+  const mailContent = generateHTML(stackOverflowResults, redditResults);
+
+  // Prepare email options
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
     subject: 'Search Results from StackOverflow and Reddit',
-    html: generateHTML(data),
+    html: mailContent,
   };
 
+  // Send email
   try {
     await transporter.sendMail(mailOptions);
     res.json({ message: 'Email sent successfully!' });
@@ -169,6 +178,8 @@ app.post('/send-email', async (req, res) => {
     res.status(500).json({ error: 'Failed to send email' });
   }
 });
+
+
 
 app.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
